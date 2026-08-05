@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AEROLINE — Browser Flight Simulator</title>
+<link rel="stylesheet" href="css/style.css">
+
+<!-- Three.js via import map (ES Modules, no build step required) -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+
+  <div id="loading-screen">
+    <div class="brand">AEROLINE<small>BROWSER FLIGHT SIMULATOR</small></div>
+    <svg id="loading-glyph" viewBox="0 0 64 64" fill="none">
+      <path d="M32 4 L37 26 L58 34 L58 39 L37 34 L37 48 L46 54 L46 58 L32 55 L18 58 L18 54 L27 48 L27 34 L6 39 L6 34 L27 26 Z"
+            fill="#3fe8d0" stroke="#0c1119" stroke-width="1"/>
+    </svg>
+    <div class="loading-bar"><div class="loading-bar-fill" id="loading-fill"></div></div>
+    <div class="loading-text" id="loading-text">INITIALIZING WORLD…</div>
+  </div>
+
+  <div id="render-target"></div>
+  <div id="vignette"></div>
+
+  <!-- ============= MAIN MENU ============= -->
+  <div id="main-menu" style="display:none;">
+    <div class="menu-shell">
+      <div class="menu-hero">
+        <div class="brand">AEROLINE<small>FLIGHT SIMULATOR</small></div>
+        <div class="horizon-wrap">
+          <svg class="horizon-ring" viewBox="0 0 280 280" style="position:absolute;inset:0;">
+            <circle cx="140" cy="140" r="138" fill="none" stroke="rgba(63,232,208,0.25)" stroke-width="1"/>
+            <g id="hero-horizon-group">
+              <rect x="-60" y="-260" width="400" height="260" fill="#1a5f8a" />
+              <rect x="-60" y="0" width="400" height="260" fill="#3c2a17" />
+              <line x1="-60" y1="0" x2="340" y2="0" stroke="#e8f6f2" stroke-width="1.5"/>
+            </g>
+            <line x1="70" y1="140" x2="120" y2="140" stroke="#ffb347" stroke-width="3"/>
+            <line x1="160" y1="140" x2="210" y2="140" stroke="#ffb347" stroke-width="3"/>
+            <circle cx="140" cy="140" r="3" fill="#ffb347"/>
+          </svg>
+        </div>
+        <div class="hero-tagline">Original 3D flight simulator built for the browser — procedural world, real aerodynamic model, full joystick &amp; throttle control.</div>
+        <div class="hero-status"><span>ENGINE: THREE.JS</span><span>STATUS: READY</span></div>
+      </div>
+
+      <div class="menu-body">
+        <h1>FLIGHT SETUP</h1>
+        <div class="sub">Configure your flight, then take the runway.</div>
+
+        <div class="field">
+          <label>Aircraft</label>
+          <div class="aircraft-grid" id="aircraft-grid"></div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Departure Airport</label>
+            <select id="sel-departure"></select>
+          </div>
+          <div class="field">
+            <label>Runway</label>
+            <select id="sel-runway"></select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Weather</label>
+            <select id="sel-weather">
+              <option value="clear">Clear Skies</option>
+              <option value="partly">Partly Cloudy</option>
+              <option value="overcast">Overcast</option>
+              <option value="rain">Rain</option>
+              <option value="storm">Storm</option>
+              <option value="fog">Fog</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Time of Day</label>
+            <select id="sel-time">
+              <option value="dawn">Sunrise</option>
+              <option value="day" selected>Day</option>
+              <option value="dusk">Sunset</option>
+              <option value="night">Night</option>
+            </select>
+          </div>
+        </div>
+
+        <label style="margin-bottom:8px;">Game Mode</label>
+        <div class="mode-tabs" id="mode-tabs">
+          <div class="mode-tab selected" data-mode="free">Free Flight</div>
+          <div class="mode-tab" data-mode="takeoff">Takeoff</div>
+          <div class="mode-tab" data-mode="landing">Landing Challenge</div>
+          <div class="mode-tab" data-mode="training">Training</div>
+        </div>
+
+        <label style="margin-bottom:8px;">Realism</label>
+        <div class="mode-tabs" id="realism-tabs">
+          <div class="mode-tab" data-realism="beginner">Beginner</div>
+          <div class="mode-tab selected" data-realism="realistic">Realistic</div>
+          <div class="mode-tab" data-realism="simulation">Simulation</div>
+        </div>
+
+        <div class="menu-footer">
+          <button class="link-btn" id="btn-controls">CONTROLS</button>
+          <button id="btn-start">START FLIGHT ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============= HUD ============= -->
+  <div id="hud" class="hidden">
+    <div id="warnings"></div>
+    <div id="msg-toast"></div>
+
+    <div class="hud-top-bar">
+      <div class="hud-chip"><span class="lab">AC</span><span id="hud-acname">—</span></div>
+      <div class="hud-chip"><span class="lab">FUEL</span><span id="hud-fuel">—</span></div>
+      <div class="hud-chip"><span class="lab">T</span><span id="hud-clock">—</span></div>
+    </div>
+
+    <div id="compass"><span id="compass-val">360°</span></div>
+
+    <div class="tape" id="tape-speed">
+      <div class="tape-label">IAS (KT)</div>
+      <div class="tape-value" id="val-speed">0</div>
+      <div class="tape-sub">V/S <span id="val-vs">0</span></div>
+    </div>
+    <div class="tape" id="tape-alt">
+      <div class="tape-label">ALT (FT)</div>
+      <div class="tape-value" id="val-alt">0</div>
+      <div class="tape-sub">AGL <span id="val-agl">0</span></div>
+    </div>
+
+    <div id="attitude">
+      <div class="sky-ground" id="attitude-sg">
+        <div class="sky"></div><div class="ground"></div>
+        <div class="pitch-ladder">
+          <div class="ladder-line" style="top:calc(50% - 102px);"><span>30</span></div>
+          <div class="ladder-line" style="top:calc(50% - 68px);"><span>20</span></div>
+          <div class="ladder-line short" style="top:calc(50% - 34px);"><span>10</span></div>
+          <div class="ladder-line short" style="top:calc(50% + 34px);"><span>-10</span></div>
+          <div class="ladder-line" style="top:calc(50% + 68px);"><span>-20</span></div>
+          <div class="ladder-line" style="top:calc(50% + 102px);"><span>-30</span></div>
+        </div>
+      </div>
+      <div class="center-marker"></div>
+    </div>
+
+    <div class="status-panel">
+      <div class="row"><span class="lab">THR</span><span class="val" id="st-thr">0%</span></div>
+      <div class="row"><span class="lab">GEAR</span><span class="val" id="st-gear">DOWN</span></div>
+      <div class="row"><span class="lab">FLAPS</span><span class="val" id="st-flaps">0</span></div>
+      <div class="row"><span class="lab">SPOILERS</span><span class="val off" id="st-spoilers">OFF</span></div>
+      <div class="row"><span class="lab">BRAKES</span><span class="val off" id="st-brakes">OFF</span></div>
+      <div class="row"><span class="lab">A/P</span><span class="val off" id="st-ap">OFF</span></div>
+      <div class="row"><span class="lab">STALL</span><span class="val off" id="st-stall">—</span></div>
+      <div class="row"><span class="lab">NRST</span><span class="val" id="st-nearest">—</span></div>
+    </div>
+
+    <div id="top-right-controls">
+      <button class="iconbtn" id="btn-camera">CAM [V]</button>
+      <button class="iconbtn" id="btn-ap">A/P</button>
+      <button class="iconbtn" id="btn-map">MAP [M]</button>
+      <button class="iconbtn" id="btn-telemetry">DEV [T]</button>
+      <button class="iconbtn" id="btn-pause">PAUSE [P]</button>
+    </div>
+
+    <div id="telemetry-panel">
+      <div class="tm-title">TELEMETRY <span class="tm-sub">dev</span></div>
+      <div class="tm-row"><span>IAS</span><b id="tm-ias">—</b><span class="tm-unit">kt</span></div>
+      <div class="tm-row"><span>ALT</span><b id="tm-alt">—</b><span class="tm-unit">ft</span></div>
+      <div class="tm-row"><span>V/S</span><b id="tm-vs">—</b><span class="tm-unit">fpm</span></div>
+      <div class="tm-row"><span>PITCH</span><b id="tm-pitch">—</b><span class="tm-unit">deg</span></div>
+      <div class="tm-row"><span>BANK</span><b id="tm-bank">—</b><span class="tm-unit">deg</span></div>
+      <div class="tm-row"><span>AoA</span><b id="tm-aoa">—</b><span class="tm-unit">deg</span></div>
+      <div class="tm-row"><span>HDG</span><b id="tm-hdg">—</b><span class="tm-unit">deg</span></div>
+      <div class="tm-divider"></div>
+      <div class="tm-row"><span>THROTTLE</span><b id="tm-throttle">—</b><span class="tm-unit">%</span></div>
+      <div class="tm-row"><span>ELEVATOR IN</span><b id="tm-elevator">—</b></div>
+      <div class="tm-row"><span>AILERON IN</span><b id="tm-aileron">—</b></div>
+      <div class="tm-row"><span>RUDDER IN</span><b id="tm-rudder">—</b></div>
+      <div class="tm-divider"></div>
+      <div class="tm-row"><span>FLAPS</span><b id="tm-flaps">—</b><span class="tm-unit">%</span></div>
+      <div class="tm-row"><span>GEAR</span><b id="tm-gear">—</b></div>
+      <div class="tm-row"><span>STATE</span><b id="tm-state">—</b></div>
+    </div>
+
+    <div id="ap-panel">
+      <h3>AUTOPILOT</h3>
+      <div class="ap-row"><span>MASTER</span><button class="ap-toggle" id="ap-master">OFF</button></div>
+      <div class="ap-row"><span>HDG HOLD</span><button class="ap-toggle" id="ap-hdg">OFF</button></div>
+      <div class="ap-row"><span>ALT HOLD</span><input type="number" id="ap-alt-val" value="5000" step="500"><button class="ap-toggle" id="ap-alt">OFF</button></div>
+      <div class="ap-row"><span>SPD (IAS)</span><input type="number" id="ap-spd-val" value="220" step="10"><button class="ap-toggle" id="ap-spd">OFF</button></div>
+    </div>
+
+    <!-- Flight controls -->
+    <div id="controls-layer">
+      <div id="joystick-zone">
+        <div id="joystick-base"></div>
+        <div id="joystick-stick"></div>
+        <div class="zone-label">PITCH / ROLL</div>
+      </div>
+      <div id="rudder-zone">
+        <div id="rudder-track"></div>
+        <div id="rudder-handle"></div>
+        <div class="zone-label">RUDDER</div>
+      </div>
+      <div id="throttle-zone">
+        <div id="throttle-label">THR</div>
+        <div id="throttle-track"><div id="throttle-fill"></div></div>
+        <div id="throttle-handle" style="bottom:0;"></div>
+      </div>
+
+      <div class="action-buttons">
+        <div class="abtn active" id="btn-gear"><span class="k">G</span>GEAR</div>
+        <div class="abtn" id="btn-flaps-up"><span class="k">F</span>FLAP-</div>
+        <div class="abtn" id="btn-flaps-down"><span class="k">⇧F</span>FLAP+</div>
+        <div class="abtn" id="btn-spoilers"><span class="k">/</span>SPLR</div>
+        <div class="abtn" id="btn-brakes"><span class="k">B</span>BRK</div>
+        <div class="abtn" id="btn-reverse"><span class="k">R</span>REV</div>
+        <div class="abtn" id="btn-lights"><span class="k">L</span>LIGHT</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============= MAP ============= -->
+  <div id="map-panel">
+    <button class="iconbtn" id="map-close">CLOSE [M]</button>
+    <canvas id="map-canvas"></canvas>
+  </div>
+
+  <!-- ============= PAUSE ============= -->
+  <div class="overlay-panel" id="pause-panel">
+    <div class="overlay-card">
+      <h2>PAUSED</h2>
+      <div class="overlay-buttons">
+        <button id="btn-resume" class="iconbtn">RESUME [P]</button>
+        <button id="btn-restart" class="iconbtn">RESTART</button>
+        <button id="btn-quit" class="iconbtn">EXIT TO MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============= CONTROLS HELP ============= -->
+  <div class="overlay-panel" id="controls-panel">
+    <div class="overlay-card">
+      <h2>KEYBOARD CONTROLS</h2>
+      <div class="row"><span>Pitch (nose down / up)</span><span class="keys">W / S · ↑ / ↓</span></div>
+      <div class="row"><span>Bank (roll left / right)</span><span class="keys">A / D · ← / →</span></div>
+      <div class="row"><span>Rudder</span><span class="keys">Q / E</span></div>
+      <div class="row"><span>Throttle</span><span class="keys">Shift / Ctrl</span></div>
+      <div class="row"><span>Landing Gear</span><span class="keys">G</span></div>
+      <div class="row"><span>Flaps (cycles)</span><span class="keys">F</span></div>
+      <div class="row"><span>Brakes</span><span class="keys">B (hold)</span></div>
+      <div class="row"><span>Reverse Thrust</span><span class="keys">R (hold, on ground)</span></div>
+      <div class="row"><span>Spoilers</span><span class="keys">/</span></div>
+      <div class="row"><span>Camera</span><span class="keys">V</span></div>
+      <div class="row"><span>Map</span><span class="keys">M</span></div>
+      <div class="row"><span>Pause</span><span class="keys">P</span></div>
+      <div class="overlay-buttons">
+        <button id="btn-close-controls" class="iconbtn">CLOSE</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
